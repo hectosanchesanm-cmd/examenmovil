@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "examen1",
-    "slug": "examen1",
+    "name": "Examen1",
+    "slug": "Examen1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.Examen1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Necesito acceder a la camara para tomar fotos.",
+        "NSPhotoLibraryUsageDescription": "Necesito acceder a la biblioteca de fotos.",
+        "NSLocationWhenInUseUsageDescription": "Necesito acceder a tu ubicacion"
+      }
     },
     "android": {
       "adaptiveIcon": {
