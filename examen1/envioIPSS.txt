@@ -1,0 +1,3 @@
+Nombre: Hector Sanchez Manriquez
+Repositorio: https://github.com/Tenchys/ReactNative_Examen1
+Fecha: 13/12/2025

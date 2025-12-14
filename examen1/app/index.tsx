@@ -1,6 +1,6 @@
+import auth from "@/infraestructure/auth";
 import EntradaTexto from "@/components/EntradaTexto";
 import Parrafo from "@/components/Parrafo";
-import { useAppContext } from "@/hooks/globalContext";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Button, View } from "react-native";
@@ -10,10 +10,9 @@ export default function Index() {
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
-  const { globalState, setGlobalState } = useAppContext();
-  const validateLogin = () => {
-    if (password === "1234") {
-      setGlobalState({ ...globalState, usuario: usuario });
+  const validateLogin = async () => {
+    let response = await auth.login(usuario, password);
+    if (response.success) {
       router.replace("/appLogin/home");
     } else alert("Login fallido");
   };

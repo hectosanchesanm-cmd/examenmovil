@@ -1,13 +1,7 @@
 import Titulo from "@/components/Titulo";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  Alert,
-  Button,
-  Image,
-  Touchable,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import todos from "@/infraestructure/todos";
+
+import { Alert, Button, Image, TouchableOpacity, View } from "react-native";
 import {
   launchCameraAsync,
   requestCameraPermissionsAsync,
@@ -19,61 +13,39 @@ import {
 } from "expo-location";
 import styles from "../../styles/indexStyles";
 import todoStyle from "@/styles/todolistStyle";
-import { Task } from "@/constants/types";
+import { TaskResponse } from "@/constants/types";
 import TaskItem from "@/components/TaskItem";
 import { useEffect, useState } from "react";
-import { nanoid } from "nanoid/non-secure";
 import Parrafo from "@/components/Parrafo";
 import EntradaTexto from "@/components/EntradaTexto";
 import { AddIcon } from "@/components/ui/icons";
-import { useAppContext } from "@/hooks/globalContext";
-
-const setAsyncData = async (name: string, data: object) => {
-  try {
-    const jsonValue = JSON.stringify(data);
-    await AsyncStorage.setItem(name, jsonValue);
-  } catch (e) {
-    Alert.alert("Error", "Error al gardar en DB");
-    console.log("Error al guardar en DB");
-  }
-};
-
-const getAsyncData = async (name: string) => {
-  try {
-    const jsonValue = await AsyncStorage.getItem(name);
-    return jsonValue != null ? JSON.parse(jsonValue) : null;
-  } catch (e) {
-    Alert.alert("Error", "Error al leer DB");
-    console.log("Error al leer DB");
-  }
-};
-
-const initaldata: Task[] = [
-  { id: nanoid(), title: "Tarea", completed: false, user: "Usuario" },
-];
+import image from "@/infraestructure/image";
 
 export default function TodoList() {
-  const { globalState, setGlobalState } = useAppContext();
-  const [tasks, setTasks] = useState<Task[]>(initaldata);
+  const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState<string>("");
   const [showAddNewTask, setShowAddNewTask] = useState<boolean>(false);
-  const [photoUri, setPhotoUri] = useState<string | null>();
+  const [photoUri, setPhotoUri] = useState<string>("");
   const [isCapturingPhoto, setIsCapturingPhoto] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   useEffect(() => {
     const init = async () => {
-      const initialDB = await getAsyncData("tasks");
-      console.log(tasks);
-      console.log(initialDB);
-      if (initialDB) {
-        setTasks(initialDB);
-      }
+      await refreshDataHandler();
     };
 
     init();
   }, []);
-
+  async function refreshDataHandler() {
+    try {
+      const initialDB = await todos.getAll();
+      if (initialDB.data) {
+        setTasks(initialDB.data);
+      }
+    } catch (e) {
+      Alert.alert("Error", "Error al traer data");
+    }
+  }
   async function handleTakePhoto() {
     if (isCapturingPhoto) return;
 
@@ -91,12 +63,25 @@ export default function TodoList() {
 
       const result = await launchCameraAsync({
         mediaTypes: ["images"],
-        quality: 0.7,
+        quality: 0.3,
         allowsEditing: false,
         exif: false,
       });
-      if (!result.canceled && result.assets.length > 0)
-        setPhotoUri(result.assets[0].uri);
+      if (!result.canceled && result.assets.length > 0) {
+        let response = await image.UPLOAD(
+          result.assets[0].mimeType !== undefined
+            ? result.assets[0].mimeType
+            : "image/jpeg",
+          result.assets[0].uri
+        );
+        if (!response.success) throw new Error("Error al subir imagenes");
+        if (response.data != null && response.data.url != null) {
+          setPhotoUri(response.data.url);
+        }
+
+        return;
+      }
+      throw new Error("Error al obtener foto");
     } catch (e) {
       console.error("error al tomar foto", e);
       Alert.alert("Error", "No se pudo tomar la foto");
@@ -105,23 +90,29 @@ export default function TodoList() {
     }
   }
 
-  const toggleTask = async (id: string) => {
-    let dbTask = await getAsyncData("tasks");
-    dbTask = dbTask.map((task: Task) =>
-      task.id === id ? { ...task, completed: !task.completed } : task
-    );
-    await setAsyncData("tasks", dbTask);
-    setTasks(dbTask);
+  const toggleTask = async (id: string, completed: boolean) => {
+    try {
+      let response = await todos.partialUpdate({
+        id: id,
+        completed: !completed,
+      });
+      if (!response.success) throw new Error("Error al completar tarea");
+    } catch (e) {
+      Alert.alert("Error", "Error al completar tarea");
+    } finally {
+      refreshDataHandler();
+    }
   };
 
   const removeTask = async (id: string) => {
-    //setTasks((prevTask) => prevTask.filter((task) => task.id !== id));
-    let dbTask = await getAsyncData("tasks");
-    dbTask = dbTask.filter((task: Task) => task.id !== id);
-    await setAsyncData("tasks", dbTask);
-    const initalDB = await getAsyncData("tasks");
-    console.log(initalDB);
-    setTasks(dbTask);
+    try {
+      let response = await todos.delete(id);
+      if (!response.success) throw new Error("Error al eliminar la tarea");
+    } catch (e) {
+      Alert.alert("Error", "No se pudo eliminar la tarea");
+    } finally {
+      refreshDataHandler();
+    }
   };
 
   const addTask = async () => {
@@ -133,33 +124,29 @@ export default function TodoList() {
       const { status } = await requestForegroundPermissionsAsync();
       if (status === "granted") {
         const locationResult = await getCurrentPositionAsync({
-          accuracy: Accuracy.Balanced,
+          accuracy: Accuracy.Lowest,
         });
         location = {
-          latitude: locationResult.coords.latitude,
-          longitude: locationResult.coords.longitude,
+          latitude: Math.round(locationResult.coords.latitude),
+          longitude: Math.round(locationResult.coords.longitude),
         };
       }
 
-      const newTask: Task = {
-        id: nanoid(),
+      const newTask: TaskResponse = {
         title: title,
         completed: false,
-        user: globalState.usuario,
-        photouri: photoUri ? photoUri : undefined,
-        coordinates: location ? location : undefined,
+        photoUri: photoUri,
+        location: location ? location : undefined,
       };
-
-      setAsyncData("tasks", tasks);
-      let dbTask = await getAsyncData("tasks");
-      dbTask = [...dbTask, newTask];
-      await setAsyncData("tasks", dbTask);
-      console.log(dbTask);
-      setTasks(dbTask);
+      let response = await todos.create(newTask);
+      if (!response.success)
+        throw new Error(
+          response.error != null ? response.error : "Error al guardar task"
+        );
     } catch (e) {
-      console.log("Error al guardar task", e);
       Alert.alert("Error", "Error al guardar tarea");
     } finally {
+      refreshDataHandler();
       setIsSaving(false);
       setShowAddNewTask(false);
     }
@@ -220,16 +207,14 @@ export default function TodoList() {
       <Parrafo contenido="Tareas" />
       <View>
         <View style={{ alignContent: "flex-start" }}>
-          {tasks.map((todo) =>
-            todo.user === globalState.usuario ? (
-              <TaskItem
-                task={todo}
-                key={todo.id}
-                onToggle={toggleTask}
-                onRemove={removeTask}
-              />
-            ) : null
-          )}
+          {tasks.map((todo) => (
+            <TaskItem
+              task={todo}
+              key={todo.id}
+              onToggle={toggleTask}
+              onRemove={removeTask}
+            />
+          ))}
         </View>
       </View>
       <TouchableOpacity

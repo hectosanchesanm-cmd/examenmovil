@@ -17,6 +17,11 @@ const styles = StyleSheet.create({
   Text: {
     fontSize: 16,
   },
+  centerItem: {
+    flexDirection: "column",
+    alignItems: "center",
+    margin: 3,
+  },
 });
 
 export default styles;
