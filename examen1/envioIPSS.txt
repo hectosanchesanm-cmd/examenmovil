@@ -1,3 +1,3 @@
-Nombre: Hector Sanchez Manriquez
+Nombre: Hector Sanchez
 Repositorio: https://github.com/hectosanchesanm-cmd/examenmovil
-Fecha: 13/12/2025
+Fecha: 24/12/2025
